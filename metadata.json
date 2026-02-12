@@ -1,0 +1,7 @@
+{
+  "name": "Vocalis Pro: Voice Engine",
+  "description": "Professional voice engine for advertising and education. Converts text to high-quality, natural-sounding Indonesian speech with studio-grade metadata.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
