@@ -34,12 +34,34 @@ export interface VoiceMetadata {
 }
 
 export interface VoiceTake {
+  id: string; // V{stack}-T{take}
+  fileName: string;
   audioBuffer: AudioBuffer | null;
   metadata: VoiceMetadata | null;
   styleDescription: string;
+  timestamp: number;
 }
 
-export interface GenerationResult {
-  take1: VoiceTake;
-  take2: VoiceTake;
+export interface VoiceStack {
+  stackId: string; // V{stack}
+  takes: VoiceTake[];
+  prompt: string;
+  voice: VoiceName;
+  emotion: Emotion;
+  timestamp: number;
+}
+
+export interface BackgroundPlan {
+  totalStacksPlanned: number;
+  remainingStacks: number;
+  takesPerStack: number;
+}
+
+export interface VoiceStackManifest {
+  sessionStarted: number;
+  totalStacks: number;
+  stacks: VoiceStack[];
+  resume_token?: string | null;
+  next_plan?: BackgroundPlan | null;
+  background_sim_active: boolean;
 }
