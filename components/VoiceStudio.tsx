@@ -2,16 +2,28 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { GeminiService } from '../services/geminiService';
 import { VoiceName, Emotion, VoiceStack, VoiceTake, VoiceMetadata, VoiceStackManifest, BackgroundPlan } from '../types';
-import { Play, Square, Download, Activity, Music, Settings, Info, Loader2, Sparkles, Volume2, ListChecks, History, Code, Trash2, Layers, Zap, PauseCircle, PlayCircle } from 'lucide-react';
+import { Play, Square, Download, Activity, Music, Settings, Info, Loader2, Sparkles, Volume2, ListChecks, History, Code, Trash2, Layers, Zap, PauseCircle, PlayCircle, MessageSquare, Mic2 } from 'lucide-react';
 
 const gemini = new GeminiService();
 
 const VOICE_OPTIONS = [
-  { name: VoiceName.Kore, description: 'Male, deep, professional', icon: '👨‍💼' },
-  { name: VoiceName.Puck, description: 'Female, energetic, bright', icon: '👩‍🎤' },
-  { name: VoiceName.Charon, description: 'Male, warm, narrative', icon: '🎙️' },
-  { name: VoiceName.Fenrir, description: 'Male, authoritative, clear', icon: '🏛️' },
-  { name: VoiceName.Aoede, description: 'Female, soft, instructional', icon: '📚' },
+  { name: VoiceName.Kore, description: 'Male, Deep, Sophisticated', icon: '👨‍💼', bio: 'Cocok untuk narasi mewah, jam tangan, atau profil perusahaan.' },
+  { name: VoiceName.Puck, description: 'Female, Energetic, Bright', icon: '👩‍🎤', bio: 'Ideal untuk iklan promo, lifestyle, dan konten anak muda.' },
+  { name: VoiceName.Charon, description: 'Male, Warm, Narrative', icon: '🎙️', bio: 'Suara bercerita yang ramah untuk audiobook atau edukasi.' },
+  { name: VoiceName.Fenrir, description: 'Male, Authoritative, Clear', icon: '🏛️', bio: 'Tegas dan berwibawa untuk berita atau instruksi formal.' },
+  { name: VoiceName.Zephyr, description: 'Female, Soft, Calming', icon: '🧘', bio: 'Tenang dan menenangkan untuk meditasi atau produk kecantikan.' },
+];
+
+const PRESET_EXPRESSIONS = [
+  'Berbisik (Whisper)',
+  'Bersemangat (Excited)',
+  'Sedih (Melancholic)',
+  'Sinister (Misterius)',
+  'Sarkastik',
+  'Ramah Tamah',
+  'Ketakutan',
+  'Marah Besar',
+  'Inspiratif'
 ];
 
 const EMOTIONS = Object.values(Emotion);
@@ -20,6 +32,8 @@ export const VoiceStudio: React.FC = () => {
   const [text, setText] = useState('Selamat datang di Vocalis Pro. Mesin suara profesional untuk kebutuhan iklan dan edukasi Anda. Suara kami terdengar natural, jernih, dan penuh emosi.');
   const [selectedVoice, setSelectedVoice] = useState<VoiceName>(VoiceName.Kore);
   const [selectedEmotion, setSelectedEmotion] = useState<Emotion>(Emotion.Professional);
+  const [selectedPresetExpression, setSelectedPresetExpression] = useState<string>('Ramah Tamah');
+  const [customExpression, setCustomExpression] = useState<string>('');
   
   // Background Simulation States
   const [isBackgroundSim, setIsBackgroundSim] = useState(false);
@@ -34,6 +48,10 @@ export const VoiceStudio: React.FC = () => {
   const [activeSource, setActiveSource] = useState<AudioBufferSourceNode | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [showManifest, setShowManifest] = useState(false);
+
+  const effectiveExpression = useMemo(() => {
+    return customExpression.trim() ? customExpression : selectedPresetExpression;
+  }, [customExpression, selectedPresetExpression]);
 
   const manifest: VoiceStackManifest = useMemo(() => ({
     sessionStarted: Date.now(),
@@ -68,18 +86,18 @@ export const VoiceStudio: React.FC = () => {
     const takeIdStr = takeIdx.toString().padStart(2, '0');
     const fullId = `${stackId}-T${takeIdStr}`;
     
-    setGenerationStatus(`[${fullId}] Analyzing Metadata...`);
-    const meta = await gemini.generateMetadata(text, selectedVoice, selectedEmotion);
+    setGenerationStatus(`[${fullId}] Analyzing Performance...`);
+    const meta = await gemini.generateMetadata(text, selectedVoice, selectedEmotion, effectiveExpression);
     
-    setGenerationStatus(`[${fullId}] Synthesizing Audio (${style})...`);
-    const audio = await gemini.generateTTS(text, selectedVoice, selectedEmotion, style);
+    setGenerationStatus(`[${fullId}] Vocalizing (${style})...`);
+    const audio = await gemini.generateTTS(text, selectedVoice, selectedEmotion, effectiveExpression, style);
     
     return {
       id: fullId,
       fileName: `vocalis_${stackId}_T${takeIdStr}.wav`,
       audioBuffer: audio,
       metadata: meta,
-      styleDescription: `${takeIdx === 1 ? 'Primary' : 'Alternative'}: ${style}`,
+      styleDescription: `${takeIdx === 1 ? 'Master' : 'Alt'}: ${style}`,
       timestamp: Date.now()
     };
   };
@@ -88,7 +106,6 @@ export const VoiceStudio: React.FC = () => {
     if (!text.trim()) return;
     setIsGenerating(true);
     
-    // Determine starting stack index
     const startStackIdx = stackHistory.length + 1;
     const totalToGenerate = isResuming && nextPlan ? nextPlan.remainingStacks : (isBackgroundSim ? batchCount : 1);
     const takesToGenerate = isResuming && nextPlan ? nextPlan.takesPerStack : (isBackgroundSim ? takesPerBatch : 2);
@@ -102,13 +119,10 @@ export const VoiceStudio: React.FC = () => {
         const takes: VoiceTake[] = [];
 
         for (let t = 1; t <= takesToGenerate; t++) {
-          const style = t === 1 ? "standard high-quality studio" : `conversational variation ${t-1}`;
+          const style = t === 1 ? "studio master performance" : `dynamic variation ${t-1}`;
           const take = await generateSingleTake(stackId, t, style);
           takes.push(take);
 
-          // Simulated check for length/limit after each take
-          // In a real background scenario, we might hit a timeout or token limit
-          // We simulate a stop if s > 0 and we're in background mode randomly or after fixed limit
           if (isBackgroundSim && s === 1 && totalToGenerate > 2 && t === takesToGenerate) {
             const token = `RESUME_${Math.random().toString(36).substring(7).toUpperCase()}`;
             setResumeToken(token);
@@ -118,20 +132,20 @@ export const VoiceStudio: React.FC = () => {
                 takesPerStack: takesToGenerate
             });
             
-            // Append partial progress
             const interruptedStack: VoiceStack = {
                 stackId,
                 takes,
                 prompt: text,
                 voice: selectedVoice,
                 emotion: selectedEmotion,
+                expression: effectiveExpression,
                 timestamp: Date.now(),
             };
             newStacks.push(interruptedStack);
             setStackHistory(prev => [...newStacks.reverse(), ...prev]);
-            setGenerationStatus('BACKGROUND_SIM: Output Limit Reached. Resume Token Issued.');
+            setGenerationStatus('LIMIT_REACHED: Saving checkpoint...');
             setIsGenerating(false);
-            return; // Terminate early
+            return;
           }
         }
 
@@ -141,26 +155,26 @@ export const VoiceStudio: React.FC = () => {
           prompt: text,
           voice: selectedVoice,
           emotion: selectedEmotion,
+          expression: effectiveExpression,
           timestamp: Date.now(),
         };
         newStacks.push(newStack);
       }
 
-      // Finalize Batch
       setStackHistory(prev => [...newStacks.reverse(), ...prev]);
       setResumeToken(null);
       setNextPlan(null);
       setGenerationStatus('');
     } catch (error) {
       console.error("Batch Generation failed", error);
-      alert("Terjadi kesalahan sistem pada background process.");
+      alert("Proses terhenti. Periksa koneksi atau API Key.");
     } finally {
       setIsGenerating(false);
     }
   };
 
   const clearHistory = () => {
-    if (confirm("Hapus semua riwayat stack dalam sesi ini?")) {
+    if (confirm("Hapus semua riwayat manifest?")) {
       setStackHistory([]);
       setResumeToken(null);
       setNextPlan(null);
@@ -206,11 +220,11 @@ export const VoiceStudio: React.FC = () => {
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/20">
-            <Layers className="text-white w-7 h-7" />
+            <Mic2 className="text-white w-7 h-7" />
           </div>
           <div>
             <h1 className="text-4xl font-bold gradient-text">Vocalis Pro</h1>
-            <p className="text-slate-400 mt-1 uppercase text-xs tracking-[0.2em] font-medium">BG_SIM Dynamic Audio Stacker</p>
+            <p className="text-slate-400 mt-1 uppercase text-xs tracking-[0.2em] font-medium">Professional Actor & Expression Stacking</p>
           </div>
         </div>
         <div className="flex gap-3">
@@ -223,7 +237,7 @@ export const VoiceStudio: React.FC = () => {
             </button>
             <div className={`px-4 py-2 glass rounded-xl flex items-center gap-2 text-xs font-mono transition-colors ${isBackgroundSim ? 'text-purple-400' : 'text-green-400'}`}>
                 <span className={`w-2 h-2 rounded-full animate-pulse ${isBackgroundSim ? 'bg-purple-500' : 'bg-green-500'}`}></span>
-                {isBackgroundSim ? 'BACKGROUND_SIM ACTIVE' : 'STANDARD_STACK ACTIVE'}
+                {isBackgroundSim ? 'BG_SIM: ON' : 'STACK_MODE: READY'}
             </div>
         </div>
       </header>
@@ -232,7 +246,7 @@ export const VoiceStudio: React.FC = () => {
         <div className="glass rounded-2xl p-6 border-blue-500/30 animate-in fade-in zoom-in duration-300">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-sm font-bold text-blue-400 font-mono flex items-center gap-2">
-              <Code className="w-4 h-4" /> VOICE_STACK_MANIFEST
+              <Code className="w-4 h-4" /> SESSION_MANIFEST
             </h3>
             <button onClick={() => setShowManifest(false)} className="text-slate-500 hover:text-white">✕</button>
           </div>
@@ -247,8 +261,8 @@ export const VoiceStudio: React.FC = () => {
             <div className="flex items-center gap-4">
                 <PauseCircle className="w-8 h-8 text-amber-500" />
                 <div>
-                    <h3 className="font-bold text-amber-500">RESUME_TOKEN ISSUED</h3>
-                    <p className="text-xs text-slate-400 font-mono">{resumeToken} — {nextPlan?.remainingStacks} stacks remaining in current plan.</p>
+                    <h3 className="font-bold text-amber-500 uppercase text-sm">Checkpoint Reached</h3>
+                    <p className="text-xs text-slate-400 font-mono">Token: {resumeToken} | {nextPlan?.remainingStacks} stacks pending.</p>
                 </div>
             </div>
             <button 
@@ -256,22 +270,24 @@ export const VoiceStudio: React.FC = () => {
                 disabled={isGenerating}
                 className="px-6 py-2 bg-amber-500 text-black font-bold rounded-xl flex items-center gap-2 hover:bg-amber-400 transition-colors disabled:opacity-50"
             >
-                <PlayCircle className="w-5 h-5" /> RESUME BACKGROUND BATCH
+                <PlayCircle className="w-5 h-5" /> RESUME BATCH
             </button>
         </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Control Panel */}
+        {/* Left Control Column */}
         <section className="lg:col-span-5 space-y-6">
+          
+          {/* Script Input */}
           <div className="glass rounded-2xl p-6 space-y-4">
             <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-slate-300 font-semibold">
-                    <Sparkles className="w-5 h-5 text-blue-400" />
-                    Input Script
+                <div className="flex items-center gap-2 text-slate-300 font-bold text-sm uppercase tracking-wider">
+                    <MessageSquare className="w-5 h-5 text-blue-400" />
+                    Script Content
                 </div>
                 <div className="flex items-center gap-2 bg-slate-800/80 p-1 px-2 rounded-lg border border-slate-700">
-                    <span className="text-[10px] font-bold text-slate-500">BG_SIM</span>
+                    <span className="text-[10px] font-bold text-slate-500">BATCH_SIM</span>
                     <button 
                         onClick={() => setIsBackgroundSim(!isBackgroundSim)}
                         className={`w-8 h-4 rounded-full transition-colors relative ${isBackgroundSim ? 'bg-purple-600' : 'bg-slate-700'}`}
@@ -281,65 +297,93 @@ export const VoiceStudio: React.FC = () => {
                 </div>
             </div>
             <textarea
-              className="w-full h-32 bg-slate-900/50 border border-slate-700 rounded-xl p-4 text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all resize-none text-sm"
-              placeholder="Script content..."
+              className="w-full h-32 bg-slate-900/50 border border-slate-700 rounded-xl p-4 text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all resize-none text-sm leading-relaxed"
+              placeholder="Tulis naskah iklan atau edukasi di sini..."
               value={text}
               onChange={(e) => setText(e.target.value)}
             />
           </div>
 
-          {isBackgroundSim && (
-             <div className="glass rounded-2xl p-6 space-y-4 border-purple-500/30 animate-in slide-in-from-top-2 duration-300">
-                <div className="flex items-center gap-2 text-purple-400 font-bold text-xs uppercase tracking-widest">
-                    <Zap className="w-4 h-4" /> Batch Configuration
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                        <label className="text-[10px] text-slate-500 font-bold">STACKS TO GENERATE</label>
-                        <input 
-                            type="number" min="1" max="10" 
-                            value={batchCount} 
-                            onChange={(e) => setBatchCount(parseInt(e.target.value))}
-                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-purple-200 outline-none focus:border-purple-500"
-                        />
-                    </div>
-                    <div className="space-y-1">
-                        <label className="text-[10px] text-slate-500 font-bold">TAKES PER STACK</label>
-                        <input 
-                            type="number" min="1" max="4" 
-                            value={takesPerBatch} 
-                            onChange={(e) => setTakesPerBatch(parseInt(e.target.value))}
-                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-purple-200 outline-none focus:border-purple-500"
-                        />
-                    </div>
-                </div>
-                <p className="text-[10px] text-slate-500 leading-relaxed italic">
-                    Engine will process all stacks and takes in a single sequence. This mode is optimized for large production batches.
-                </p>
-             </div>
-          )}
-
+          {/* Actor Profile */}
           <div className="glass rounded-2xl p-6 space-y-4">
-            <label className="flex items-center gap-2 text-slate-300 font-semibold">
+            <label className="flex items-center gap-2 text-slate-300 font-bold text-sm uppercase tracking-wider">
               <Music className="w-5 h-5 text-purple-400" />
               Actor Profile
             </label>
-            <div className="grid grid-cols-1 gap-2">
+            <div className="space-y-2">
               {VOICE_OPTIONS.map((v) => (
                 <button
                   key={v.name}
                   onClick={() => setSelectedVoice(v.name)}
-                  className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
-                    selectedVoice === v.name ? 'bg-blue-600/20 border-blue-500 text-blue-100 neon-blue' : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:border-slate-500'
+                  className={`w-full flex items-start gap-4 p-3 rounded-xl border transition-all text-left ${
+                    selectedVoice === v.name ? 'bg-blue-600/20 border-blue-500 text-blue-100 ring-1 ring-blue-500/50' : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:border-slate-500'
                   }`}
                 >
-                  <span className="text-xl">{v.icon}</span>
-                  <div className="text-left">
-                    <div className="text-xs font-bold">{v.name}</div>
-                    <div className="text-[10px] opacity-60">{v.description}</div>
+                  <span className="text-3xl mt-1">{v.icon}</span>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold uppercase tracking-widest">{v.name}</span>
+                      <span className="text-[10px] opacity-60 font-medium">— {v.description}</span>
+                    </div>
+                    <p className="text-[10px] mt-1 leading-normal opacity-70 italic">{v.bio}</p>
                   </div>
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* Performance Expression */}
+          <div className="glass rounded-2xl p-6 space-y-4">
+            <label className="flex items-center gap-2 text-slate-300 font-bold text-sm uppercase tracking-wider">
+              <Volume2 className="w-5 h-5 text-pink-400" />
+              Vocal Performance
+            </label>
+            
+            <div className="space-y-3">
+              <div className="grid grid-cols-3 gap-1.5">
+                {EMOTIONS.map((e) => (
+                  <button
+                    key={e}
+                    onClick={() => setSelectedEmotion(e)}
+                    className={`py-1.5 rounded-lg border text-[9px] uppercase font-bold tracking-tighter transition-all ${
+                      selectedEmotion === e ? 'bg-pink-600/20 border-pink-500 text-pink-100' : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:border-slate-500'
+                    }`}
+                  >
+                    {e}
+                  </button>
+                ))}
+              </div>
+
+              <div className="pt-2">
+                <label className="text-[10px] font-bold text-slate-500 mb-2 block uppercase">Preset Expressions</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {PRESET_EXPRESSIONS.map((exp) => (
+                    <button
+                      key={exp}
+                      onClick={() => {
+                        setSelectedPresetExpression(exp);
+                        setCustomExpression('');
+                      }}
+                      className={`px-3 py-1.5 rounded-full border text-[10px] font-medium transition-all ${
+                        selectedPresetExpression === exp && !customExpression ? 'bg-blue-600 text-white border-blue-500' : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:border-slate-500'
+                      }`}
+                    >
+                      {exp}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <label className="text-[10px] font-bold text-slate-500 mb-2 block uppercase">Custom Performance Nuance</label>
+                <input 
+                  type="text"
+                  placeholder="Contoh: 'Ceria tapi misterius', 'Membujuk', 'Membentak'..."
+                  value={customExpression}
+                  onChange={(e) => setCustomExpression(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-blue-100"
+                />
+              </div>
             </div>
           </div>
 
@@ -353,43 +397,45 @@ export const VoiceStudio: React.FC = () => {
             } text-white`}
           >
             {isGenerating ? (
-              <><Loader2 className="w-6 h-6 animate-spin" /> {isBackgroundSim ? 'PROCESSING BATCH...' : 'STACKING...'}</>
+              <><Loader2 className="w-6 h-6 animate-spin" /> {isBackgroundSim ? 'PROCESSING BATCH...' : 'VOCALIZING...'}</>
             ) : (
-              <><ListChecks className="w-6 h-6" /> {isBackgroundSim ? 'EXECUTE BACKGROUND BATCH' : 'START NEW STACK'}</>
+              <><ListChecks className="w-6 h-6" /> {isBackgroundSim ? 'EXECUTE BATCH STACK' : 'GENERATE PERFORMANCE'}</>
             )}
           </button>
         </section>
 
-        {/* Master Stacks History */}
+        {/* Right Workspace Column */}
         <section className="lg:col-span-7 space-y-6">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold flex items-center gap-2">
               <History className="w-6 h-6 text-blue-400" />
-              Active Workspace
+              Manifest Workspace
             </h2>
             {stackHistory.length > 0 && (
               <button onClick={clearHistory} className="text-xs text-slate-500 hover:text-red-400 flex items-center gap-1 transition-colors">
-                <Trash2 className="w-3 h-3" /> PURGE MANIFEST
+                <Trash2 className="w-3 h-3" /> CLEAR MANIFEST
               </button>
             )}
           </div>
 
           {isGenerating && (
-            <div className={`glass rounded-2xl p-12 flex flex-col items-center justify-center text-center space-y-6 animate-pulse border-2 border-dashed ${isBackgroundSim ? 'border-purple-500/50' : 'border-blue-500/50'}`}>
+            <div className={`glass rounded-3xl p-12 flex flex-col items-center justify-center text-center space-y-6 animate-pulse border-2 border-dashed ${isBackgroundSim ? 'border-purple-500/50' : 'border-blue-500/50'}`}>
               <div className={`w-16 h-16 border-4 rounded-full animate-spin ${isBackgroundSim ? 'border-purple-500/20 border-t-purple-500' : 'border-blue-500/20 border-t-blue-500'}`}></div>
               <div className="space-y-2">
-                <h3 className={`text-lg font-bold ${isBackgroundSim ? 'text-purple-400' : 'text-blue-400'}`}>
-                    {isBackgroundSim ? 'BACKGROUND_SIM ENGINE BUSY' : 'SEQUENTIAL ENGINE ACTIVE'}
+                <h3 className={`text-lg font-bold uppercase tracking-widest ${isBackgroundSim ? 'text-purple-400' : 'text-blue-400'}`}>
+                    {isBackgroundSim ? 'Background Engine Active' : 'Synthesis Engine Busy'}
                 </h3>
-                <p className="text-sm font-mono text-slate-300">{generationStatus}</p>
+                <div className="bg-slate-900/80 px-4 py-2 rounded-xl border border-slate-800">
+                    <p className="text-xs font-mono text-slate-200">{generationStatus}</p>
+                </div>
               </div>
             </div>
           )}
 
           {stackHistory.length === 0 && !isGenerating ? (
-             <div className="h-96 glass border-dashed border-2 border-slate-800 rounded-3xl flex flex-col items-center justify-center text-slate-600 p-8 text-center">
+             <div className="h-96 glass border-dashed border-2 border-slate-800 rounded-[2.5rem] flex flex-col items-center justify-center text-slate-600 p-8 text-center">
                 <Activity className="w-12 h-12 mb-4 opacity-10" />
-                <p className="text-sm font-medium">Workspace is idle.<br/>Stacks will be appended to the manifest in sequence.</p>
+                <p className="text-sm font-medium">Workspace is idle.<br/>Performances will stack here in chronological order.</p>
              </div>
           ) : (
             <div className="space-y-12 pb-20">
@@ -426,6 +472,7 @@ const StackGroup: React.FC<{
         </div>
         <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-widest bg-slate-900/80 px-4 py-1.5 rounded-xl border border-slate-800">
           STACK {stack.stackId} • {stack.voice} • {stack.emotion}
+          {stack.expression && <span className="text-blue-500/60 ml-2 italic border-l border-slate-700 pl-2">{stack.expression}</span>}
         </span>
         <div className="flex-1 h-[1px] bg-gradient-to-r from-slate-800 to-transparent"></div>
       </div>

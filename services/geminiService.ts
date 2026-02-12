@@ -43,13 +43,14 @@ export class GeminiService {
     this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
   }
 
-  async generateMetadata(text: string, voice: VoiceName, emotion: Emotion): Promise<VoiceMetadata> {
+  async generateMetadata(text: string, voice: VoiceName, emotion: Emotion, expression: string): Promise<VoiceMetadata> {
     const response = await this.ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: `Analyze this script for Indonesian TTS and generate technical audio metadata. 
       Script: "${text}"
-      Voice: ${voice}
-      Emotion: ${emotion}
+      Voice Profile: ${voice}
+      Base Emotion: ${emotion}
+      Nuance/Expression: ${expression}
       
       Target: -16 LUFS. Output must be raw JSON matching the schema.`,
       config: {
@@ -79,13 +80,20 @@ export class GeminiService {
     return JSON.parse(response.text.trim());
   }
 
-  async generateTTS(text: string, voice: VoiceName, emotion: Emotion, styleNote: string): Promise<AudioBuffer> {
-    const prompt = `Act as a professional Indonesian voice actor. Say the following text in a ${emotion} and ${styleNote} style. 
-    Use natural Indonesian pronunciation (conversational, not rigid). 
-    Avoid "AI cadence". Insert micro-pauses at commas and 0.5s pauses at periods. 
-    Add very subtle, natural breaths where appropriate. 
+  async generateTTS(text: string, voice: VoiceName, emotion: Emotion, expression: string, styleNote: string): Promise<AudioBuffer> {
+    const prompt = `Act as a professional Indonesian voice actor. 
+    Voice: ${voice}. 
+    Mood: ${emotion}. 
+    Expression/Nuance: ${expression}.
+    Additional Style: ${styleNote}.
     
-    Text: "${text}"`;
+    Performance Instructions:
+    - Use natural Indonesian pronunciation (conversational, colloquial where needed, not rigid/formal). 
+    - Avoid rhythmic "AI cadence". 
+    - Insert micro-pauses at commas and 0.5s pauses at periods. 
+    - Add very subtle, natural breaths where appropriate to enhance realism. 
+    
+    Script to Speak: "${text}"`;
 
     const response = await this.ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",

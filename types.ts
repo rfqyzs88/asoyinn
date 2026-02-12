@@ -3,9 +3,8 @@ export enum VoiceName {
   Kore = 'Kore',
   Puck = 'Puck',
   Charon = 'Charon',
-  Kasper = 'Kasper',
   Fenrir = 'Fenrir',
-  Aoede = 'Aoede'
+  Zephyr = 'Zephyr'
 }
 
 export enum Emotion {
@@ -48,6 +47,7 @@ export interface VoiceStack {
   prompt: string;
   voice: VoiceName;
   emotion: Emotion;
+  expression: string;
   timestamp: number;
 }
 
